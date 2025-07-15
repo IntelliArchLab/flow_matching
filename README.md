@@ -1,99 +1,128 @@
-<div align="center">
+# Flow Matching for Image Generation
 
-# Flow Matching
+A streamlined flow matching codebase focused specifically on image generation. This repository contains complete implementations for training flow matching models on image datasets using both continuous and discrete flows.
 
-[![arXiv](assets/arXiv-2412.06264-red.svg)](https://arxiv.org/abs/2412.06264)
-[![CI](https://github.com/facebookresearch/flow_matching/actions/workflows/ci.yaml/badge.svg)](https://github.com/facebookresearch/flow_matching/actions/workflows/ci.yaml)
-[![Coverage](https://github.com/facebookresearch/flow_matching/raw/refs/heads/gh-pages/coverage/coverage-badge.svg)](https://stunning-potato-4k4z71e.pages.github.io/coverage/)
-[![License: CC BY-NC 4.0](assets/License-CC_BY--NC_4.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc/4.0/)
-[![PyPI](https://img.shields.io/pypi/v/flow-matching)](https://pypi.org/project/flow-matching/)
+## Features
 
+- ✅ **Continuous Flow Matching**: Standard flow matching for RGB images
+- ✅ **Discrete Flow Matching**: Flow matching for categorical/discrete image representations  
+- ✅ **Multiple Datasets**: Support for ImageNet and CIFAR-10
+- ✅ **Advanced Training**: Distributed training, EMA, classifier-free guidance
+- ✅ **Pre-built Models**: UNet and Discrete UNet architectures
+- ✅ **Complete Pipeline**: Training scripts, evaluation, and inference notebook
 
-</div>
+## Quick Start
 
-`flow_matching` is a PyTorch library for Flow Matching algorithms, featuring continuous and discrete implementations. It includes examples for both text and image modalities. This repository is part of [Flow Matching Guide and Codebase](https://arxiv.org/abs/2412.06264).
+### 1. Setup Environment
 
-
-![](./assets/teaser.png)
-
-## Installation
-
-This repository requires Python 3.9 and Pytorch 2.1 or greater. To install the latest version run:
-```
-pip install flow_matching
-```
-
-## Repository structure
-
-The core and example folders are structured in the following way:
 ```bash
-.
-├── flow_matching                  # Core library
-│   ├── loss                       # Loss functions
-│   │   └── ...
-│   ├── path                       # Path and schedulers
-│   │   ├── ...
-│   │   └── scheduler              # Schedulers and transformations
-│   │       └── ...
-│   ├── solver                     # Solvers for continuous and discrete flows
-│   │   └── ...
-│   └── utils
-│       └── ...
-└── examples                       # Synthetic, image, and text examples
-    ├── ...
-    ├── image
-    │       └── ...
-    └── text 
-            └── ...
-```
-
-## Development
-
-To create a conda environment with all required dependencies, run:
-```
+# Create conda environment
 conda env create -f environment.yml
 conda activate flow_matching
-```
 
-Install pre-commit hook. This will ensure that all linting is done on each commit
-```
-pre-commit install
-```
-
-Install the `flow_matching` package in an editable mode:
-```
+# Install package
 pip install -e .
+
+# Install additional requirements
+pip install -r requirements.txt
 ```
 
-## FAQ
+### 2. Prepare Data
 
-#### I want to train a Flow Matching model, where can I find the training code?
+Download and prepare ImageNet data:
 
-We provide [training examples](examples). Under this folder, you can find synthetic data for [continuous](examples/2d_flow_matching.ipynb), [discrete](examples/2d_discrete_flow_matching.ipynb), and [Riemannian](examples/2d_riemannian_flow_matching_flat_torus.ipynb) Flow Matching. We also provide full training [examples](examples/image) (continuous and discrete) on CIFAR10 and face-blurred ImageNet, and a scalable discrete Flow Matching example for [text modeling](examples/text).
+```bash
+# Set data directory
+export IMAGENET_DIR=~/flow_matching/data/
+export IMAGENET_RES=64
 
-#### Do you release pre-trained models?
+# Download blurred ImageNet from official website
+tar -xf ~/Downloads/train_blurred.tar.gz -C $IMAGENET_DIR
 
-In this version, we don't release pre-trained models. All models under [examples](examples) can be trained from scratch by a single running command. 
+# Downsample to desired resolution  
+git clone git@github.com:PatrykChrabaszcz/Imagenet32_Scripts.git
+python Imagenet32_Scripts/image_resizer_imagent.py -i ${IMAGENET_DIR}train_blurred -o ${IMAGENET_DIR}train_blurred_$IMAGENET_RES -s $IMAGENET_RES -a box -r -j 10
+```
 
-#### How to contribute to this codebase?
-Please follow the [contribution guide](CONTRIBUTING.md).
+### 3. Training
+
+**Test run locally:**
+```bash
+python train.py --data_path=${IMAGENET_DIR}train_blurred_$IMAGENET_RES/box/ --test_run
+```
+
+**Full training on SLURM cluster:**
+```bash
+python submitit_train.py --data_path=${IMAGENET_DIR}train_blurred_$IMAGENET_RES/box/
+```
+
+**Discrete flow matching:**
+```bash
+python submitit_train.py --dataset=cifar10 --discrete_flow_matching --batch_size=32 --epochs=3000
+```
+
+### 4. Evaluation & Inference
+
+```bash
+# Evaluate trained model
+python submitit_train.py --data_path=${IMAGENET_DIR}train_blurred_$IMAGENET_RES/box/ --resume=./output_dir/checkpoint-899.pth --compute_fid --eval_only
+
+# Use Jupyter notebook for interactive inference
+jupyter notebook load_model_checkpoint.ipynb
+```
+
+## Repository Structure
+
+```
+.
+├── flow_matching/              # Core flow matching library
+│   ├── path/                   # Probability paths and schedulers
+│   ├── solver/                 # ODE and discrete solvers
+│   └── utils/                  # Utilities and model wrappers
+├── models/                     # Model architectures
+│   ├── unet.py                 # UNet for continuous flows
+│   ├── discrete_unet.py        # UNet for discrete flows
+│   └── model_configs.py        # Model configurations
+├── training/                   # Training utilities
+│   ├── train_loop.py           # Training loop implementation
+│   ├── eval_loop.py            # Evaluation loop
+│   └── ...                     # Data transforms, distributed mode, etc.
+├── train.py                    # Main training script
+├── submitit_train.py           # SLURM submission script
+├── train_arg_parser.py         # Command line arguments
+└── load_model_checkpoint.ipynb # Inference notebook
+```
+
+## Results
+
+| Dataset | Model | Epochs | FID | Command |
+|---------|-------|--------|-----|---------|
+| ImageNet64 (Blurred) | Class conditional UNet | 900 | 1.64 | `python submitit_train.py --data_path=${IMAGENET_DIR}train_blurred_64/box/ --batch_size=32 --nodes=8` |
+| CIFAR10 (Discrete) | Unconditional UNet | 2500 | 3.58 | `python submitit_train.py --dataset=cifar10 --discrete_flow_matching --batch_size=32 --epochs=3000` |
+
+## Core Components
+
+### Flow Matching Paths
+- `CondOTProbPath`: Conditional Optimal Transport probability paths
+- `MixtureDiscreteProbPath`: Discrete probability paths for categorical data
+
+### Solvers  
+- `ODESolver`: Continuous ODE solver for flow sampling
+- `MixtureDiscreteEulerSolver`: Discrete Euler solver for categorical flows
+
+### Model Architectures
+- `UNetModel`: Standard UNet for continuous flows
+- `DiscreteUNetModel`: UNet adapted for discrete/categorical data
+
+## Requirements
+
+- Python 3.9+
+- PyTorch 2.0+
+- torchvision
+- torchdiffeq
+- submitit (for cluster training)
+- torchmetrics[image] (for evaluation)
 
 ## License
 
-The code in this repository is CC BY-NC licensed. See the [LICENSE](LICENSE) for details.
-
-## Citation
-
-If you found this repository useful, please cite the following.
-
-```
-@misc{lipman2024flowmatchingguidecode,
-      title={Flow Matching Guide and Code}, 
-      author={Yaron Lipman and Marton Havasi and Peter Holderrieth and Neta Shaul and Matt Le and Brian Karrer and Ricky T. Q. Chen and David Lopez-Paz and Heli Ben-Hamu and Itai Gat},
-      year={2024},
-      eprint={2412.06264},
-      archivePrefix={arXiv},
-      primaryClass={cs.LG},
-      url={https://arxiv.org/abs/2412.06264}, 
-}
-```
+This project is licensed under the CC-by-NC license. See the LICENSE file for details.
