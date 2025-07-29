@@ -37,7 +37,7 @@ def train_one_epoch(
     model: torch.nn.Module,
     data_loader: Iterable,
     optimizer: torch.optim.Optimizer,
-    lr_schedule: torch.torch.optim.lr_scheduler.LRScheduler,
+    lr_schedule: torch.optim.lr_scheduler.LRScheduler,
     device: torch.device,
     epoch: int,
     loss_scaler: NativeScalerWithGradNormCount,
@@ -72,7 +72,7 @@ def train_one_epoch(
 
         if args.discrete_flow_matching:
             samples = (samples * 255.0).to(torch.long)
-            t = torch.torch.rand(samples.shape[0]).to(device)
+            t = torch.rand(samples.shape[0]).to(device)
 
             # sample probability path
             x_0 = (
@@ -92,7 +92,7 @@ def train_one_epoch(
             if args.skewed_timesteps:
                 t = skewed_timestep_sample(samples.shape[0], device=device)
             else:
-                t = torch.torch.rand(samples.shape[0]).to(device)
+                t = torch.rand(samples.shape[0]).to(device)
             path_sample = path.sample(t=t, x_0=noise, x_1=samples)
             x_t = path_sample.x_t
             u_t = path_sample.dx_t
