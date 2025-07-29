@@ -55,7 +55,11 @@ def train_one_epoch(
     else:
         path = CondOTProbPath()
 
-    for data_iter_step, (samples, labels) in enumerate(data_loader):
+    for data_iter_step, batch in enumerate(data_loader):
+        if args.clip_feature_training:
+            samples, labels, class_labels = batch
+        else:
+            samples, labels = batch
         if data_iter_step % accum_iter == 0:
             optimizer.zero_grad()
             batch_loss.reset()
@@ -63,12 +67,16 @@ def train_one_epoch(
                 break
 
         samples = samples.to(device, non_blocking=True)
-        labels = labels.to(device, non_blocking=True)
-
-        if torch.rand(1) < args.class_drop_prob:
+        if args.clip_feature_training:
+            labels = labels.to(device, non_blocking=True)
+            class_labels = class_labels.to(device, non_blocking=True)
             conditioning = {}
         else:
-            conditioning = {"label": labels}
+            labels = labels.to(device, non_blocking=True)
+            if torch.rand(1) < args.class_drop_prob:
+                conditioning = {}
+            else:
+                conditioning = {"label": labels}
 
         if args.discrete_flow_matching:
             samples = (samples * 255.0).to(torch.long)
@@ -86,19 +94,29 @@ def train_one_epoch(
                 logits.reshape([-1, 257]), samples.reshape([-1])
             ).mean()
         else:
-            # Scaling to [-1, 1] from [0, 1]
-            samples = samples * 2.0 - 1.0
-            noise = torch.randn_like(samples).to(device)
-            if args.skewed_timesteps:
-                t = skewed_timestep_sample(samples.shape[0], device=device)
-            else:
+            if args.clip_feature_training:
+                x_0 = samples
+                x_1 = labels
                 t = torch.rand(samples.shape[0]).to(device)
-            path_sample = path.sample(t=t, x_0=noise, x_1=samples)
-            x_t = path_sample.x_t
-            u_t = path_sample.dx_t
+                path_sample = path.sample(t=t, x_0=x_0, x_1=x_1)
+                x_t = path_sample.x_t
+                u_t = path_sample.dx_t
+                with torch.cuda.amp.autocast():
+                    loss = torch.pow(model(x_t, t) - u_t, 2).mean()
+            else:
+                # Scaling to [-1, 1] from [0, 1]
+                samples = samples * 2.0 - 1.0
+                noise = torch.randn_like(samples).to(device)
+                if args.skewed_timesteps:
+                    t = skewed_timestep_sample(samples.shape[0], device=device)
+                else:
+                    t = torch.rand(samples.shape[0]).to(device)
+                path_sample = path.sample(t=t, x_0=noise, x_1=samples)
+                x_t = path_sample.x_t
+                u_t = path_sample.dx_t
 
-            with torch.cuda.amp.autocast():
-                loss = torch.pow(model(x_t, t, extra=conditioning) - u_t, 2).mean()
+                with torch.cuda.amp.autocast():
+                    loss = torch.pow(model(x_t, t, extra=conditioning) - u_t, 2).mean()
 
         loss_value = loss.item()
         batch_loss.update(loss)

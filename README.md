@@ -9,6 +9,7 @@ A streamlined flow matching codebase focused specifically on image generation. T
 - ✅ **Multiple Datasets**: Support for ImageNet and CIFAR-10
 - ✅ **Advanced Training**: Distributed training, EMA, classifier-free guidance
 - ✅ **Pre-built Models**: UNet and Discrete UNet architectures
+- ✅ **CLIP Feature Matching**: Train a one-layer CLIP transformer to map patch embeddings to first-layer features
 - ✅ **Complete Pipeline**: Training scripts, evaluation, and inference notebook
 
 ## Quick Start
@@ -59,6 +60,11 @@ python submitit_train.py --data_path=${IMAGENET_DIR}train_blurred_$IMAGENET_RES/
 **Discrete flow matching:**
 ```bash
 python submitit_train.py --dataset=cifar10 --discrete_flow_matching --batch_size=32 --epochs=3000
+```
+
+**CLIP feature matching:**
+```bash
+python train.py --dataset=cifar10 --clip_feature_training --test_run
 ```
 
 ### 4. Evaluation & Inference

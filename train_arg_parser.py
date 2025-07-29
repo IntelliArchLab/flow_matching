@@ -79,6 +79,11 @@ def get_args_parser():
         help="Dataset to use.",
     )
     parser.add_argument(
+        "--clip_feature_training",
+        action="store_true",
+        help="Train CLIP one-layer flow matching model on CIFAR-10 features.",
+    )
+    parser.add_argument(
         "--data_path",
         default="./data/image_generation",
         type=str,

@@ -5,6 +5,8 @@
 # LICENSE file in the root directory of this source tree.
 from typing import Union
 
+from models.clip_one_layer import ClipOneLayer
+
 from models.discrete_unet import DiscreteUNetModel
 from models.ema import EMA
 from models.unet import UNetModel
@@ -84,12 +86,19 @@ MODEL_CONFIGS = {
         "use_new_attention_order": True,
         "with_fourier_features": False,
     },
+    "clip_one_layer": {
+        "embed_dim": 768,
+        "num_heads": 12,
+    },
 }
 
 
 def instantiate_model(
     architechture: str, is_discrete: bool, use_ema: bool
-) -> Union[UNetModel, DiscreteUNetModel]:
+) -> Union[UNetModel, DiscreteUNetModel, ClipOneLayer]:
+    if architechture == "clip_one_layer":
+        model = ClipOneLayer(**MODEL_CONFIGS[architechture])
+        return EMA(model=model) if use_ema else model
     assert (
         architechture in MODEL_CONFIGS
     ), f"Model architecture {architechture} is missing its config."
