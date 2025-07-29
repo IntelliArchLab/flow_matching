@@ -222,3 +222,44 @@ def eval_model(
             break
 
     return {"fid": float(fid_metric.compute().detach().cpu())}
+
+
+def eval_clip_accuracy(model: DistributedDataParallel, data_loader: Iterable, device: torch.device) -> float:
+    """Compute classification accuracy using CLIP text encoder."""
+    from transformers import CLIPModel, CLIPProcessor
+
+    clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
+    processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+    clip_model.to(device)
+    clip_model.eval()
+
+    class_names = [
+        "airplane",
+        "automobile",
+        "bird",
+        "cat",
+        "deer",
+        "dog",
+        "frog",
+        "horse",
+        "ship",
+        "truck",
+    ]
+    text_inputs = processor(text=class_names, return_tensors="pt", padding=True).to(device)
+    with torch.no_grad():
+        text_features = clip_model.get_text_features(**text_inputs)
+
+    correct = 0
+    total = 0
+    for samples, _ in data_loader:
+        samples = samples.to(device)
+        t = torch.zeros(samples.shape[0], device=device)
+        with torch.no_grad():
+            preds = model(samples, t)
+            vision_features = clip_model.vision_model(inputs_embeds=preds).pooler_output
+            logits = vision_features @ text_features.T
+            predicted = logits.argmax(dim=1)
+        correct += (predicted == _).sum().item()
+        total += samples.shape[0]
+        break
+    return correct / max(total, 1)

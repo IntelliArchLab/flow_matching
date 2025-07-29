@@ -58,7 +58,11 @@ def main(args):
 
     logger.info(f"Initializing Dataset: {args.dataset}")
     transform_train = get_train_transform()
-    if args.dataset == "imagenet":
+    if args.clip_feature_training:
+        from training.data_clip_features import ClipFeatureDataset
+
+        dataset_train = ClipFeatureDataset(split="train", data_root=args.data_path)
+    elif args.dataset == "imagenet":
         dataset_train = datasets.ImageFolder(args.data_path, transform=transform_train)
     elif args.dataset == "cifar10":
         dataset_train = datasets.CIFAR10(
@@ -90,8 +94,9 @@ def main(args):
 
     # define the model
     logger.info("Initializing Model")
+    model_arch = "clip_one_layer" if args.clip_feature_training else args.dataset
     model = instantiate_model(
-        architechture=args.dataset,
+        architechture=model_arch,
         is_discrete=args.discrete_flow_matching,
         use_ema=args.use_ema,
     )
@@ -192,14 +197,20 @@ def main(args):
                 )
             else:
                 fid_samples = args.fid_samples // num_tasks
-            eval_stats = eval_model(
-                model,
-                data_loader_train,
-                device,
-                epoch=epoch,
-                fid_samples=fid_samples,
-                args=args,
-            )
+            if args.clip_feature_training:
+                from training.eval_loop import eval_clip_accuracy
+
+                acc = eval_clip_accuracy(model, data_loader_train, device)
+                eval_stats = {"clip_acc": acc}
+            else:
+                eval_stats = eval_model(
+                    model,
+                    data_loader_train,
+                    device,
+                    epoch=epoch,
+                    fid_samples=fid_samples,
+                    args=args,
+                )
             log_stats.update({f"eval_{k}": v for k, v in eval_stats.items()})
 
         if args.output_dir and distributed_mode.is_main_process():
